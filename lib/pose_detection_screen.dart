@@ -42,14 +42,18 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     if (await _requestPermissions()) {
       // 利用可能なカメラのリストを取得し、背面カメラを優先して選択
       _cameras = await availableCameras();
-      _camera = _cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
-          orElse: () => _cameras.first);
-      _cameraIndex = _cameras.indexOf(_camera!);
-      // ポーズ検出器を初期化
-      _poseDetector = PoseDetector(options: PoseDetectorOptions());
-      // カメラの初期化を開始
-      _initializeCamera();
+      if (_cameras.isNotEmpty) {
+        _cameraIndex = _cameras.indexWhere(
+            (c) => c.lensDirection == CameraLensDirection.back);
+        if (_cameraIndex == -1) {
+          _cameraIndex = 0;
+        }
+        _camera = _cameras[_cameraIndex];
+        // ポーズ検出器を初期化
+        _poseDetector = PoseDetector(options: PoseDetectorOptions());
+        // カメラの初期化を開始
+        _initializeCamera();
+      }
     }
   }
 
@@ -98,6 +102,21 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
         // エラーハンドリング（例: ユーザーにアラートを表示）
       }
     });
+  }
+
+  /// カメラを切り替える
+  void _switchCamera() async {
+    if (_cameras.length > 1) {
+      // 現在のカメラを停止
+      await _cameraController?.dispose();
+
+      // 次のカメラを選択
+      _cameraIndex = (_cameraIndex + 1) % _cameras.length;
+      _camera = _cameras[_cameraIndex];
+
+      // 新しいカメラを初期化
+      _initializeCamera();
+    }
   }
 
   /// カメラ画像を受け取り、ポーズ検出のために処理
@@ -182,6 +201,15 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
                 _imageSize, // 処理した画像のサイズを使用
                 _cameraController!.description.sensorOrientation), // センサーの向き
             size: MediaQuery.of(context).size, // 画面全体のサイズを使用
+          ),
+          // カメラ切り替えボタン
+          Positioned(
+            top: 40,
+            right: 20,
+            child: IconButton(
+              icon: const Icon(Icons.switch_camera, color: Colors.white),
+              onPressed: _switchCamera,
+            ),
           ),
         ],
       ),
