@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'image_converter.dart';
 import 'pose_painter.dart';
+import 'pose_smoother.dart';
 
 /// ポーズ検出画面のStatefulWidget
 class PoseDetectionScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class PoseDetectionScreen extends StatefulWidget {
 class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
   CameraController? _cameraController; // カメラを制御するためのコントローラー
   late PoseDetector _poseDetector; // ポーズ検出器のインスタンス
+  late PoseSmoother _poseSmoother; // ポーズを滑らかにするためのクラス
   List<Pose> _poses = []; // 検出されたポーズのリスト
   Size? _imageSize; // 処理中のカメラ画像のサイズ
   bool _isCameraInitialized = false; // カメラが初期化されたかどうかのフラグ
@@ -49,8 +51,9 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
           _cameraIndex = 0;
         }
         _camera = _cameras[_cameraIndex];
-        // ポーズ検出器を初期化
+        // ポーズ検出器とスムーザーを初期化
         _poseDetector = PoseDetector(options: PoseDetectorOptions());
+        _poseSmoother = PoseSmoother();
         // カメラの初期化を開始
         _initializeCamera();
       }
@@ -146,19 +149,14 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     try {
       // ポーズ検出器で画像を処理
       final poses = await _poseDetector.processImage(inputImage);
-      // 検出されたポーズの数をログに出力
-      print('Poses found: ${poses.length}');
-      // 各ポーズのランドマーク情報をログに出力
-      for (final pose in poses) {
-        print('  Pose ID: ${pose.landmarks.values.first.x}'); // 例: 最初のランドマークのX座標
-        for (final landmark in pose.landmarks.values) {
-          print('    ${landmark.type}: (${landmark.x}, ${landmark.y}, ${landmark.z})');
-        }
-      }
+
+      // 検出されたポーズを滑らかにする
+      final smoothedPoses = poses.map((pose) => _poseSmoother.smooth(pose)).toList();
+
       // ウィジェットがマウントされていればUIを更新
       if (mounted) {
         setState(() {
-          _poses = poses; // 検出されたポーズでリストを更新
+          _poses = smoothedPoses; // スムージングされたポーズでリストを更新
           _imageSize = inputImage.metadata?.size; // 画像サイズを更新
         });
       }
@@ -191,6 +189,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     // カメラが初期化されていればカメラプレビューと骨格描画を表示
     return Scaffold(
       body: Stack(
+        fit: StackFit.expand, // Stackの子ウィジェットを親いっぱいに広げる
         children: [
           // カメラプレビューを表示
           CameraPreview(_cameraController!),
@@ -199,8 +198,10 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
             painter: PosePainter(
                 _poses, // 検出されたポーズ
                 _imageSize, // 処理した画像のサイズを使用
-                _cameraController!.description.sensorOrientation), // センサーの向き
-            size: MediaQuery.of(context).size, // 画面全体のサイズを使用
+                _cameraController!.description.sensorOrientation, // センサーの向き
+                _cameraController!.value.deviceOrientation, // デバイスの向き
+                _camera!.lensDirection), // カメラの向き
+            // sizeは指定せず、StackFit.expandによって親と同じサイズになる
           ),
           // カメラ切り替えボタン
           Positioned(
