@@ -9,7 +9,7 @@ class PoseSmoother {
   // 前のフレームでスムージングされたランドマークの位置を保持する
   Map<PoseLandmarkType, PoseLandmark> _smoothedLandmarks = {};
 
-  PoseSmoother({this.alpha = 0.3}); // この値を0.1にするとより滑らかに、0.5でより追従性が良くなる。
+  PoseSmoother({this.alpha = 0.8}); // この値を0.1にするとより滑らかに、0.5でより追従性が良くなる。
 
   /// 新しいポーズを受け取り、滑らかにしたポーズを返す
   Pose smooth(Pose pose) {
