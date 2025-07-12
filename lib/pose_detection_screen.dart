@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'image_converter.dart';
 import 'pose_painter.dart';
 import 'pose_smoother.dart';
+import 'video_recorder_service.dart';
 
 /// ポーズ検出画面のStatefulWidget
 class PoseDetectionScreen extends StatefulWidget {
@@ -24,6 +25,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
   CameraController? _cameraController; // カメラを制御するためのコントローラー
   late PoseDetector _poseDetector; // ポーズ検出器のインスタンス
   late PoseSmoother _poseSmoother; // ポーズを滑らかにするためのクラス
+  late VideoRecorderService _recorderService; // 録画サービス
   List<Pose> _poses = []; // 検出されたポーズのリスト
   Size? _imageSize; // 処理中のカメラ画像のサイズ
   bool _isCameraInitialized = false; // カメラが初期化されたかどうかのフラグ
@@ -46,7 +48,8 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
       _cameras = await availableCameras();
       if (_cameras.isNotEmpty) {
         _cameraIndex = _cameras.indexWhere(
-            (c) => c.lensDirection == CameraLensDirection.back);
+          (c) => c.lensDirection == CameraLensDirection.back,
+        );
         if (_cameraIndex == -1) {
           _cameraIndex = 0;
         }
@@ -63,7 +66,10 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
   /// カメラのパーミッションを要求する
   Future<bool> _requestPermissions() async {
     final cameraStatus = await Permission.camera.request();
-    return cameraStatus.isGranted; // 許可されたかどうかを返す
+    final storageStatus = await Permission.storage.request(); // Android用
+    final photosStatus = await Permission.photos.request(); // iOS用
+
+    return cameraStatus.isGranted && (storageStatus.isGranted || photosStatus.isGranted);
   }
 
   /// カメラの初期化と映像ストリームの開始
@@ -79,7 +85,8 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
         enableAudio: false, // 音声は不要
         // プラットフォームに応じた画像フォーマットグループを設定
         imageFormatGroup: Platform.isAndroid
-            ? ImageFormatGroup.nv21 // AndroidではNV21
+            ? ImageFormatGroup
+                  .nv21 // AndroidではNV21
             : ImageFormatGroup.bgra8888, // iOSではBGRA8888
       );
 
@@ -87,6 +94,9 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
         // カメラコントローラーを初期化
         await _cameraController!.initialize();
         if (!mounted) return; // ウィジェットが破棄されていたら何もしない
+
+        // 録画サービスを初期化
+        _recorderService = VideoRecorderService(_cameraController!);
 
         setState(() {
           _isCameraInitialized = true; // カメラ初期化済みフラグを立てる
@@ -151,7 +161,9 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
       final poses = await _poseDetector.processImage(inputImage);
 
       // 検出されたポーズを滑らかにする
-      final smoothedPoses = poses.map((pose) => _poseSmoother.smooth(pose)).toList();
+      final smoothedPoses = poses
+          .map((pose) => _poseSmoother.smooth(pose))
+          .toList();
 
       // ウィジェットがマウントされていればUIを更新
       if (mounted) {
@@ -171,6 +183,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
   @override
   void dispose() {
     _isProcessing = false; // 処理中フラグをリセット
+    _recorderService.dispose(); // 録画サービスを破棄
     _cameraController?.dispose(); // カメラコントローラーを破棄
     _poseDetector.close(); // ポーズ検出器を閉じる
     super.dispose(); // 親クラスのdisposeを呼び出す
@@ -180,11 +193,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
   Widget build(BuildContext context) {
     // カメラが初期化されていなければローディングインジケーターを表示
     if (!_isCameraInitialized) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     // カメラが初期化されていればカメラプレビューと骨格描画を表示
     return Scaffold(
@@ -196,11 +205,12 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
           // 骨格を描画するCustomPaintウィジェット
           CustomPaint(
             painter: PosePainter(
-                _poses, // 検出されたポーズ
-                _imageSize, // 処理した画像のサイズを使用
-                _cameraController!.description.sensorOrientation, // センサーの向き
-                _cameraController!.value.deviceOrientation, // デバイスの向き
-                _camera!.lensDirection), // カメラの向き
+              _poses, // 検出されたポーズ
+              _imageSize, // 処理した画像のサイズを使用
+              _cameraController!.description.sensorOrientation, // センサーの向き
+              _cameraController!.value.deviceOrientation, // デバイスの向き
+              _camera!.lensDirection,
+            ), // カメラの向き
             // sizeは指定せず、StackFit.expandによって親と同じサイズになる
           ),
           // カメラ切り替えボタン
@@ -212,8 +222,50 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
               onPressed: _switchCamera,
             ),
           ),
+          // 録画ボタン
+          Positioned(
+            bottom: 40,
+            left: 20,
+            child: ValueListenableBuilder(
+              valueListenable: _recorderService.state,
+              builder: (context, RecordingState state, child) {
+                return _buildRecordButton(state);
+              },
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// 録画ボタンの状態に応じてウィジェットを構築する
+  Widget _buildRecordButton(RecordingState state) {
+    switch (state) {
+      case RecordingState.idle:
+        // アイドル状態：録画開始ボタン
+        return IconButton(
+          icon: const Icon(Icons.circle, color: Colors.red, size: 48),
+          onPressed: _recorderService.startRecordingSequence,
+        );
+      case RecordingState.waiting:
+        // 待機中：カウントダウン表示
+        return ValueListenableBuilder(
+          valueListenable: _recorderService.countdown,
+          builder: (context, int countdown, child) {
+            return Column(
+              children: [
+                const Icon(Icons.hourglass_top, color: Colors.white, size: 48),
+                Text(countdown.toString(), style: const TextStyle(color: Colors.white, fontSize: 24)),
+              ],
+            );
+          },
+        );
+      case RecordingState.recording:
+        // 録画中：停止ボタン
+        return IconButton(
+          icon: const Icon(Icons.stop, color: Colors.red, size: 48),
+          onPressed: _recorderService.stopRecording,
+        );
+    }
   }
 }
