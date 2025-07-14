@@ -16,6 +16,8 @@ enum RecordingState {
 /// 録画機能を提供するサービスクラス
 class VideoRecorderService {
   final CameraController _cameraController;
+  final VoidCallback onRecordingStart;
+  final VoidCallback onRecordingComplete;
 
   // UIに状態を通知するためのValueNotifier
   final ValueNotifier<RecordingState> state = ValueNotifier(
@@ -27,7 +29,7 @@ class VideoRecorderService {
   Timer? _recordTimer;
   Timer? _countdownTimer;
 
-  VideoRecorderService(this._cameraController);
+  VideoRecorderService(this._cameraController, {required this.onRecordingStart, required this.onRecordingComplete});
 
   /// 録画シーケンスを開始する（30秒待機 -> 30秒録画）
   Future<void> startRecordingSequence() async {
@@ -47,6 +49,7 @@ class VideoRecorderService {
     _waitTimer = Timer(const Duration(seconds: 30), () async {
       _countdownTimer?.cancel();
       try {
+        onRecordingStart(); // 録画開始を通知
         await _cameraController.startVideoRecording();
         state.value = RecordingState.recording;
 
@@ -55,6 +58,7 @@ class VideoRecorderService {
       } catch (e) {
         print("Error starting video recording: $e");
         _resetState();
+        onRecordingComplete(); // エラー時も完了を通知
       }
     });
   }
@@ -79,6 +83,7 @@ class VideoRecorderService {
       print("Error stopping or saving video: $e");
     } finally {
       _resetState();
+      onRecordingComplete(); // 録画完了を通知
     }
   }
 

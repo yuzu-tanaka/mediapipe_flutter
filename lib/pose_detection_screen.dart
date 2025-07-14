@@ -66,10 +66,13 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
   /// カメラのパーミッションを要求する
   Future<bool> _requestPermissions() async {
     final cameraStatus = await Permission.camera.request();
+    final microphoneStatus = await Permission.microphone.request();
     final storageStatus = await Permission.storage.request(); // Android用
     final photosStatus = await Permission.photos.request(); // iOS用
 
-    return cameraStatus.isGranted && (storageStatus.isGranted || photosStatus.isGranted);
+    return cameraStatus.isGranted &&
+        microphoneStatus.isGranted &&
+        (storageStatus.isGranted || photosStatus.isGranted);
   }
 
   /// カメラの初期化と映像ストリームの開始
@@ -96,7 +99,21 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
         if (!mounted) return; // ウィジェットが破棄されていたら何もしない
 
         // 録画サービスを初期化
-        _recorderService = VideoRecorderService(_cameraController!);
+        _recorderService = VideoRecorderService(
+          _cameraController!,
+          onRecordingStart: () {
+            // 録画開始時にイメージストリームを停止
+            _cameraController?.stopImageStream();
+          },
+          onRecordingComplete: () {
+            // 録画完了時にイメージストリームを再開
+            _cameraController?.startImageStream((image) {
+              if (_isProcessing) return;
+              _isProcessing = true;
+              _processCameraImage(image);
+            });
+          },
+        );
 
         setState(() {
           _isCameraInitialized = true; // カメラ初期化済みフラグを立てる
@@ -134,8 +151,6 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
   /// カメラ画像を受け取り、ポーズ検出のために処理
   Future<void> _processCameraImage(CameraImage image) async {
-    // バグ取り用プリント文
-    print('processCameraImageを実行');
     // CameraImageをInputImageに変換
     final inputImage = inputImageFromCameraImage(
       image,
@@ -145,12 +160,8 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     );
     if (inputImage == null) {
       _isProcessing = false;
-      // バグ取り用プリント文
-      print('inputImageがnullだった(T T)/---');
       return;
     }
-    // バグ取り用プリント文
-    print('inputImageがnullじゃなかった');
     await _processImage(inputImage); // ポーズ検出処理を実行
   }
 
@@ -255,7 +266,10 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
             return Column(
               children: [
                 const Icon(Icons.hourglass_top, color: Colors.white, size: 48),
-                Text(countdown.toString(), style: const TextStyle(color: Colors.white, fontSize: 24)),
+                Text(
+                  countdown.toString(),
+                  style: const TextStyle(color: Colors.white, fontSize: 24),
+                ),
               ],
             );
           },
