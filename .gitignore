@@ -69,3 +69,4 @@ lib/generated_plugin_registrant.dart
 .idea/
 *.iml
 .idea/workspace.xml
+test.log
