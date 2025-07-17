@@ -29,7 +29,11 @@ class VideoRecorderService {
   Timer? _recordTimer;
   Timer? _countdownTimer;
 
-  VideoRecorderService(this._cameraController, {required this.onRecordingStart, required this.onRecordingComplete});
+  VideoRecorderService(
+    this._cameraController, {
+    required this.onRecordingStart,
+    required this.onRecordingComplete,
+  });
 
   /// 録画シーケンスを開始する（30秒待機 -> 30秒録画）
   Future<void> startRecordingSequence() async {
@@ -69,6 +73,13 @@ class VideoRecorderService {
 
     try {
       final file = await _cameraController.stopVideoRecording();
+      final oldPath = file.path;
+
+      // 新しいファイルパスを生成 (.temp を .mp4 に変更)
+      final newPath = oldPath.replaceAll('.temp', '.mp4');
+
+      // ファイルをリネーム
+      final renamedFile = await File(oldPath).rename(newPath);
 
       // 現在の日時を取得し、指定されたフォーマットに変換
       final String timestamp = DateFormat(
@@ -76,9 +87,13 @@ class VideoRecorderService {
       ).format(DateTime.now());
       final String fileName = 'pose_video_$timestamp.mp4';
 
-      // ファイルをギャラリーに保存
-      await ImageGallerySaverPlus.saveFile(file.path, name: fileName);
-      print("Video saved as $fileName");
+      // ギャラリーに保存
+      await ImageGallerySaverPlus.saveFile(
+        renamedFile.path, // リネーム後のパスを使用
+        name: fileName,
+        isReturnPathOfIOS: true,
+      );
+      print("Video saved as $fileName"); // ユーザーへの通知として残す
     } catch (e) {
       print("Error stopping or saving video: $e");
     } finally {
