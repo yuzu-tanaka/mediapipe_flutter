@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'image_converter.dart';
 import 'pose_painter.dart';
 import 'pose_smoother.dart';
+import 'best_pose_analyzer.dart';
 
 // アプリケーションの状態を管理するenum
 enum AppState {
@@ -206,20 +207,17 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     setState(() => _appState = AppState.analyzing);
     _cameraController?.stopImageStream();
 
-    // --- ベストポーズ分析ロジック（ダミー実装） ---
-    // TODO: BestPoseAnalyzerクラスを実装し、置き換える
-    _bestPoseImages = _frameData.map((d) => d.imageBytes).take(4).toList();
-    if (_bestPoseImages.length < 4) {
-       // データが4フレーム未満の場合、あるもので埋める
-      while (_bestPoseImages.length < 4 && _bestPoseImages.isNotEmpty) {
-        _bestPoseImages.add(_bestPoseImages.first);
-      }
-       // それでも足りない場合はダミー画像
-       while (_bestPoseImages.length < 4) {
-         _bestPoseImages.add(Uint8List(0)); // 空の画像
-       }
-    }
-    // --- ここまで ---
+    """    // ベストポーズ分析
+    final analyzer = BestPoseAnalyzer(_frameData);
+    final results = analyzer.analyze();
+
+    // 指定された順序で結果をリストに格納
+    _bestPoseImages = [
+      results['top'] ?? Uint8List(0),
+      results['right'] ?? Uint8List(0),
+      results['bottom'] ?? Uint8List(0),
+      results['left'] ?? Uint8List(0),
+    ];""
 
     Future.delayed(const Duration(seconds: 1), () {
       setState(() => _appState = AppState.showingResults);
@@ -294,29 +292,59 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
   }
 
   Widget _buildResultsView() {
+    final List<Map<String, dynamic>> displayOrder = [
+      {'label': 'ベストポーズ(上)', 'image': _bestPoseImages[0]},
+      {'label': 'ベストポーズ(右)', 'image': _bestPoseImages[1]},
+      {'label': 'ベストポーズ(下)', 'image': _bestPoseImages[2]},
+      {'label': 'ベストポーズ(左)', 'image': _bestPoseImages[3]},
+    ];
+
     return SafeArea(
       child: Column(
         children: [
           Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              children: List.generate(4, (index) {
-                // TODO: 正しい順序で表示する
-                return Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    image: _bestPoseImages[index].isNotEmpty
-                        ? DecorationImage(
-                            image: MemoryImage(_bestPoseImages[index]),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
-                  child: _bestPoseImages[index].isEmpty ? const Center(child: Text('No Image')) : null,
+            child: GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 4,
+                mainAxisSpacing: 4,
+              ),
+              itemCount: 4,
+              itemBuilder: (context, index) {
+                final item = displayOrder[index];
+                final imageBytes = item['image'] as Uint8List;
+                return Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      color: Colors.black,
+                      child: Text(
+                        item['label'] as String,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          image: imageBytes.isNotEmpty
+                              ? DecorationImage(
+                                  image: MemoryImage(imageBytes),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: imageBytes.isEmpty
+                            ? const Center(child: Text('No Image'))
+                            : null,
+                      ),
+                    ),
+                  ],
                 );
-              }),
+              },
             ),
+          ),
           ),
           Padding(
             padding: const EdgeInsets.all(16.0),
