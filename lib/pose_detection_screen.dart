@@ -9,10 +9,10 @@ import 'package:flutter/rendering.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'best_pose_analyzer.dart';
 import 'image_converter.dart';
 import 'pose_painter.dart';
 import 'pose_smoother.dart';
-import 'best_pose_analyzer.dart';
 
 // アプリケーションの状態を管理するenum
 enum AppState {
@@ -114,13 +114,14 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
     _cameraController!.initialize().then((_) {
       if (!mounted) return;
-      _isCameraInitialized = true;
+      setState(() {
+        _isCameraInitialized = true;
+      });
       _cameraController!.startImageStream((image) {
         if (_isProcessing) return;
         _isProcessing = true;
         _processCameraImage(image);
       });
-      setState(() {});
     }).catchError((e) {
       print("Error initializing camera: $e");
     });
@@ -207,20 +208,20 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     setState(() => _appState = AppState.analyzing);
     _cameraController?.stopImageStream();
 
-    """    // ベストポーズ分析
     final analyzer = BestPoseAnalyzer(_frameData);
     final results = analyzer.analyze();
 
-    // 指定された順序で結果をリストに格納
     _bestPoseImages = [
       results['top'] ?? Uint8List(0),
       results['right'] ?? Uint8List(0),
       results['bottom'] ?? Uint8List(0),
       results['left'] ?? Uint8List(0),
-    ];""
+    ];
 
     Future.delayed(const Duration(seconds: 1), () {
-      setState(() => _appState = AppState.showingResults);
+      if (mounted) {
+        setState(() => _appState = AppState.showingResults);
+      }
     });
   }
 
@@ -345,7 +346,6 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
               },
             ),
           ),
-          ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
@@ -360,7 +360,6 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
       ),
     );
   }
-}
 
   Widget _buildActionButton() {
     if (_appState == AppState.idle) {
