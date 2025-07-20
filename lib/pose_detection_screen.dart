@@ -238,6 +238,16 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     setState(() => _appState = AppState.idle);
   }
 
+  void _switchCamera() {
+    if (_cameras.length > 1) {
+      // 現在のカメラを停止し、新しいカメラを初期化する
+      _cameraController?.dispose();
+      _cameraIndex = (_cameraIndex + 1) % _cameras.length;
+      _camera = _cameras[_cameraIndex];
+      _initializeCamera();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isCameraInitialized) {
@@ -288,6 +298,14 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
           right: 0,
           child: Center(child: _buildActionButton()),
         ),
+        Positioned(
+          top: 40,
+          right: 20,
+          child: IconButton(
+            icon: const Icon(Icons.switch_camera, color: Colors.white),
+            onPressed: _appState == AppState.idle ? _switchCamera : null,
+          ),
+        ),
       ],
     );
   }
@@ -332,7 +350,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
                           image: imageBytes.isNotEmpty
                               ? DecorationImage(
                                   image: MemoryImage(imageBytes),
-                                  fit: BoxFit.cover,
+                                  fit: BoxFit.contain,
                                 )
                               : null,
                         ),
