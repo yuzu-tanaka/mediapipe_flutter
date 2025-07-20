@@ -1,4 +1,3 @@
-
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
 /// 指数移動平均（EMA）を使ってポーズのランドマークを滑らかにするクラス
@@ -9,7 +8,7 @@ class PoseSmoother {
   // 前のフレームでスムージングされたランドマークの位置を保持する
   Map<PoseLandmarkType, PoseLandmark> _smoothedLandmarks = {};
 
-  PoseSmoother({this.alpha = 0.8}); // この値を0.1にするとより滑らかに、0.5でより追従性が良くなる。
+  PoseSmoother({this.alpha = 0.5}); // この値を0.1にするとより滑らかに、0.5でより追従性が良くなる。
 
   /// 新しいポーズを受け取り、滑らかにしたポーズを返す
   Pose smooth(Pose pose) {

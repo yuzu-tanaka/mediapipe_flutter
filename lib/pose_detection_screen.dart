@@ -13,6 +13,7 @@ import 'best_pose_analyzer.dart';
 import 'image_converter.dart';
 import 'pose_painter.dart';
 import 'pose_smoother.dart';
+import 'inquiry_screen.dart';
 
 // アプリケーションの状態を管理するenum
 enum AppState {
@@ -370,7 +371,16 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton(onPressed: _reset, child: const Text('再撮影')),
-                ElevatedButton(onPressed: () {}, child: const Text('問い合わせ')),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => InquiryScreen(poseImages: _bestPoseImages),
+                      ),
+                    );
+                  },
+                  child: const Text('問い合わせ'),
+                ),
               ],
             ),
           )
