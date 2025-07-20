@@ -4,7 +4,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 
 class GenerativeAiService {
   // TODO: ここにあなたのGemini APIキーを設定してください
-  static const String _apiKey = "YOUR_API_KEY";
+  static const String _apiKey = "Your_API_KEY";
 
   final GenerativeModel _model;
 

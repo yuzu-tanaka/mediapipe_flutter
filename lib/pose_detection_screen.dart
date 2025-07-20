@@ -86,7 +86,9 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     if (await _requestPermissions()) {
       _cameras = await availableCameras();
       if (_cameras.isNotEmpty) {
-        _cameraIndex = _cameras.indexWhere((c) => c.lensDirection == CameraLensDirection.back);
+        _cameraIndex = _cameras.indexWhere(
+          (c) => c.lensDirection == CameraLensDirection.back,
+        );
         if (_cameraIndex == -1) _cameraIndex = 0;
         _camera = _cameras[_cameraIndex];
         _poseDetector = PoseDetector(options: PoseDetectorOptions());
@@ -113,23 +115,31 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
           : ImageFormatGroup.bgra8888,
     );
 
-    _cameraController!.initialize().then((_) {
-      if (!mounted) return;
-      setState(() {
-        _isCameraInitialized = true;
-      });
-      _cameraController!.startImageStream((image) {
-        if (_isProcessing) return;
-        _isProcessing = true;
-        _processCameraImage(image);
-      });
-    }).catchError((e) {
-      print("Error initializing camera: $e");
-    });
+    _cameraController!
+        .initialize()
+        .then((_) {
+          if (!mounted) return;
+          setState(() {
+            _isCameraInitialized = true;
+          });
+          _cameraController!.startImageStream((image) {
+            if (_isProcessing) return;
+            _isProcessing = true;
+            _processCameraImage(image);
+          });
+        })
+        .catchError((e) {
+          print("Error initializing camera: $e");
+        });
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
-    final inputImage = inputImageFromCameraImage(image, _cameraController, _cameras, _cameraIndex);
+    final inputImage = inputImageFromCameraImage(
+      image,
+      _cameraController,
+      _cameras,
+      _cameraIndex,
+    );
     if (inputImage == null) {
       _isProcessing = false;
       return;
@@ -137,7 +147,9 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
     try {
       final poses = await _poseDetector.processImage(inputImage);
-      final smoothedPoses = poses.map((pose) => _poseSmoother.smooth(pose)).toList();
+      final smoothedPoses = poses
+          .map((pose) => _poseSmoother.smooth(pose))
+          .toList();
 
       if (_appState == AppState.collecting && smoothedPoses.isNotEmpty) {
         await _captureFrame(smoothedPoses.first);
@@ -158,12 +170,18 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
   Future<void> _captureFrame(Pose pose) async {
     try {
-      RenderRepaintBoundary boundary = _boundaryKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      RenderRepaintBoundary boundary =
+          _boundaryKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 1.0);
-      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
       image.dispose();
       if (byteData != null) {
-        _frameData.add(PoseFrameData(imageBytes: byteData.buffer.asUint8List(), pose: pose));
+        _frameData.add(
+          PoseFrameData(imageBytes: byteData.buffer.asUint8List(), pose: pose),
+        );
       }
     } catch (e) {
       print("Error capturing frame: $e");
@@ -175,7 +193,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
     setState(() {
       _appState = AppState.waiting;
-      _countdown = 30;
+      _countdown = 10;
     });
 
     _waitTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -192,7 +210,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     _frameData.clear();
     setState(() {
       _appState = AppState.collecting;
-      _countdown = 30;
+      _countdown = 10;
     });
 
     _collectTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -205,9 +223,16 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     });
   }
 
-  void _analyzePoses() {
-    setState(() => _appState = AppState.analyzing);
-    _cameraController?.stopImageStream();
+  Future<void> _analyzePoses() async {
+    setState(() {
+      _appState = AppState.analyzing;
+    });
+
+    // カメラを完全に停止・解放する
+    await _cameraController?.stopImageStream();
+    await _cameraController?.dispose();
+    _cameraController = null;
+    _isProcessing = false;
 
     final analyzer = BestPoseAnalyzer(_frameData);
     final results = analyzer.analyze();
@@ -231,11 +256,10 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     _collectTimer?.cancel();
     _frameData.clear();
     _bestPoseImages.clear();
-    _cameraController?.startImageStream((image) {
-      if (_isProcessing) return;
-      _isProcessing = true;
-      _processCameraImage(image);
-    });
+
+    // カメラを再初期化する
+    _initializeCamera();
+
     setState(() => _appState = AppState.idle);
   }
 
@@ -251,17 +275,30 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isCameraInitialized) {
+    // カメラが初期化されていなくて、かつ、カメラプレビューが必要な状態の場合のみインジケーターを表示する
+    if (!_isCameraInitialized &&
+        (_appState == AppState.idle ||
+            _appState == AppState.waiting ||
+            _appState == AppState.collecting)) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return Scaffold(
-      body: _buildBody(),
-    );
+    return Scaffold(body: _buildBody());
   }
 
   Widget _buildBody() {
     switch (_appState) {
+      case AppState.analyzing:
+        return const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('分析中...'),
+            ],
+          ),
+        );
       case AppState.showingResults:
         return _buildResultsView();
       default:
@@ -340,7 +377,10 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
                       color: Colors.black,
                       child: Text(
                         item['label'] as String,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     Expanded(
@@ -375,7 +415,8 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => InquiryScreen(poseImages: _bestPoseImages),
+                        builder: (context) =>
+                            InquiryScreen(poseImages: _bestPoseImages),
                       ),
                     );
                   },
@@ -383,7 +424,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
@@ -394,7 +435,10 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
       return ElevatedButton(
         onPressed: _startSequence,
         child: const Text('撮影開始'),
-        style: ElevatedButton.styleFrom(shape: const CircleBorder(), padding: const EdgeInsets.all(24)),
+        style: ElevatedButton.styleFrom(
+          shape: const CircleBorder(),
+          padding: const EdgeInsets.all(24),
+        ),
       );
     }
     return const SizedBox.shrink(); // 他の状態ではボタンを非表示
@@ -408,8 +452,18 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(message, style: const TextStyle(color: Colors.white, fontSize: 24)),
-            Text('$_countdown', style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold)),
+            Text(
+              message,
+              style: const TextStyle(color: Colors.white, fontSize: 24),
+            ),
+            Text(
+              '$_countdown',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 48,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),
