@@ -62,7 +62,7 @@ class VideoRecorderService {
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       countdown.value--;
 
-      // 指定のタイミングで音を鳴らす
+      // 指定のタイミングでカウントダウン音を再生
       if (countdown.value == 20 ||
           countdown.value == 10 ||
           countdown.value == 5 ||
