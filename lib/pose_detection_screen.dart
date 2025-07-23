@@ -241,6 +241,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
         setState(() => _countdown--);
       } else {
         timer.cancel();
+        _playSound('sounds/stop.mp3'); // データ収集完了音
         _analyzePoses();
       }
     });

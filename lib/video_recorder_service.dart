@@ -101,6 +101,7 @@ class VideoRecorderService {
     if (state.value != RecordingState.recording) return;
 
     try {
+      _playSound('sounds/stop.mp3'); // 録画停止音
       final file = await _cameraController.stopVideoRecording();
       final oldPath = file.path;
 
