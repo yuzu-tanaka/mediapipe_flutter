@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:io'; // Fileクラスのために追加
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // 日付フォーマットのために追加
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:intl/intl.dart'; // 日付フォーマットのために追加
 
 /// 録画の状態を管理するためのenum
 enum RecordingState {
@@ -29,11 +30,26 @@ class VideoRecorderService {
   Timer? _recordTimer;
   Timer? _countdownTimer;
 
+  // AudioPlayerのインスタンスを追加
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
   VideoRecorderService(
     this._cameraController, {
     required this.onRecordingStart,
     required this.onRecordingComplete,
   });
+
+  // 音声再生用のヘルパーメソッド
+  Future<void> _playSound(String soundAsset) async {
+    try {
+      // 以前の再生が完了するのを待たずに新しい音を再生するため、
+      // playメソッドの前にstopを呼び出すか、新しいPlayerインスタンスを作成します。
+      // ここではシンプルにplayを呼び出します。
+      await _audioPlayer.play(AssetSource(soundAsset));
+    } catch (e) {
+      print("Error playing sound: $e");
+    }
+  }
 
   /// 録画シーケンスを開始する（30秒待機 -> 30秒録画）
   Future<void> startRecordingSequence() async {
@@ -41,9 +57,21 @@ class VideoRecorderService {
 
     // 1. 待機状態に移行
     state.value = RecordingState.waiting;
-    countdown.value = 30;
+    countdown.value = 30; // カウントダウンの初期値を設定
+
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       countdown.value--;
+
+      // 指定のタイミングで音を鳴らす
+      if (countdown.value == 20 ||
+          countdown.value == 10 ||
+          countdown.value == 5 ||
+          countdown.value == 3 ||
+          countdown.value == 2 ||
+          countdown.value == 1) {
+        _playSound('sounds/countdown.mp3');
+      }
+
       if (countdown.value <= 0) {
         timer.cancel();
       }
@@ -56,6 +84,7 @@ class VideoRecorderService {
         onRecordingStart(); // 録画開始を通知
         await _cameraController.startVideoRecording();
         state.value = RecordingState.recording;
+        _playSound('sounds/start.mp3'); // 録画開始音
 
         // 3. 30秒後に録画を停止
         _recordTimer = Timer(const Duration(seconds: 30), stopRecording);
@@ -114,6 +143,7 @@ class VideoRecorderService {
   /// サービスを破棄する（メモリリーク防止）
   void dispose() {
     _resetState();
+    _audioPlayer.dispose(); // AudioPlayerを破棄
     state.dispose();
     countdown.dispose();
   }

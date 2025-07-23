@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,9 +12,9 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'best_pose_analyzer.dart';
 import 'image_converter.dart';
+import 'inquiry_screen.dart';
 import 'pose_painter.dart';
 import 'pose_smoother.dart';
-import 'inquiry_screen.dart';
 
 // アプリケーションの状態を管理するenum
 enum AppState {
@@ -67,6 +68,9 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
   // 結果表示関連
   List<Uint8List> _bestPoseImages = [];
 
+  // 音声再生
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
   @override
   void initState() {
     super.initState();
@@ -79,7 +83,16 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     _collectTimer?.cancel();
     _cameraController?.dispose();
     _poseDetector.close();
+    _audioPlayer.dispose(); // AudioPlayerを破棄
     super.dispose();
+  }
+
+  Future<void> _playSound(String soundAsset) async {
+    try {
+      await _audioPlayer.play(AssetSource(soundAsset));
+    } catch (e) {
+      print("Error playing sound: $e");
+    }
   }
 
   Future<void> _initialize() async {
@@ -199,6 +212,15 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
     _waitTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_countdown > 1) {
         setState(() => _countdown--);
+        // 指定のタイミングでカウントダウン音を再生
+        if (_countdown == 20 ||
+            _countdown == 10 ||
+            _countdown == 5 ||
+            _countdown == 3 ||
+            _countdown == 2 ||
+            _countdown == 1) {
+          _playSound('sounds/countdown.mp3');
+        }
       } else {
         timer.cancel();
         _startCollecting();
@@ -208,6 +230,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
   void _startCollecting() {
     _frameData.clear();
+    _playSound('sounds/start.mp3'); // データ収集開始音
     setState(() {
       _appState = AppState.collecting;
       _countdown = 10;
