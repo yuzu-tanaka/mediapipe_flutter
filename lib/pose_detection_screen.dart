@@ -206,6 +206,7 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
     setState(() {
       _appState = AppState.waiting;
+      _playSound('sounds/start.mp3'); // ボタンタップ時に音を鳴らす
       _countdown = 10;
     });
 
@@ -230,10 +231,10 @@ class _PoseDetectionScreenState extends State<PoseDetectionScreen> {
 
   void _startCollecting() {
     _frameData.clear();
-    _playSound('sounds/start.mp3'); // データ収集開始音
     setState(() {
       _appState = AppState.collecting;
       _countdown = 10;
+      _playSound('sounds/start.mp3'); // データ収集開始音
     });
 
     _collectTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
